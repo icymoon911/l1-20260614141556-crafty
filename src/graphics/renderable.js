@@ -1,4 +1,5 @@
-var Crafty = require("../core/core.js");
+var Crafty = require("../core/core.js"),
+    RenderState = require("./render-state.js");
 
 /**@
  * #Renderable
@@ -33,42 +34,14 @@ Crafty.c("Renderable", {
      */
     _visible: true,
 
-    _setterRenderable: function(name, value) {
-        if (this[name] === value) {
-            return;
-        }
-
-        //everything will assume the value
-        this[name] = value;
-
-        // flag for redraw
-        this.trigger("Invalidate");
-    },
-
     // Setup all the properties that we need to define
+    // Uses RenderState.defineRenderableProp for standardized guarded setters:
+    // assigning the same value is a no-op and will NOT fire Invalidate.
     properties: {
-        alpha: {
-            set: function(v) {
-                this._setterRenderable("_alpha", v);
-            },
-            get: function() {
-                return this._alpha;
-            },
-            configurable: true,
-            enumerable: true
-        },
+        alpha: RenderState.defineRenderableProp("_alpha"),
         _alpha: { enumerable: false },
 
-        visible: {
-            set: function(v) {
-                this._setterRenderable("_visible", v);
-            },
-            get: function() {
-                return this._visible;
-            },
-            configurable: true,
-            enumerable: true
-        },
+        visible: RenderState.defineRenderableProp("_visible"),
         _visible: { enumerable: false }
     },
 
@@ -92,11 +65,7 @@ Crafty.c("Renderable", {
 
     // Dirty the entity when it's invalidated
     _invalidateRenderable: function() {
-        //flag if changed
-        if (this._changed === false) {
-            this._changed = true;
-            this._drawLayer.dirty(this);
-        }
+        RenderState.markDirty(this);
     },
 
     // Attach the entity to a layer to be rendered

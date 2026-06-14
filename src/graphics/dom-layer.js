@@ -1,4 +1,5 @@
 var Crafty = require("../core/core.js"),
+    RenderState = require("./render-state.js"),
     document = window.document;
 
 /**@
@@ -108,9 +109,8 @@ Crafty._registerLayerTemplate("DOM", {
     _render: function() {
         var changed = this._changedObjs;
         // Adjust the viewport
-        if (this._dirtyViewport) {
+        if (RenderState.consumeViewportDirty(this)) {
             this._setViewport();
-            this._dirtyViewport = false;
         }
 
         //if no objects have been changed, stop
@@ -120,7 +120,8 @@ Crafty._registerLayerTemplate("DOM", {
             k = changed.length;
         //loop over all DOM elements needing updating
         for (; i < k; ++i) {
-            changed[i].draw()._changed = false;
+            changed[i].draw();
+            RenderState.clearDirty(changed[i]);
         }
 
         //reset DOM array

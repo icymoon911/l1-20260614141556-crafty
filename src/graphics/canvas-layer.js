@@ -1,4 +1,5 @@
-var Crafty = require("../core/core.js");
+var Crafty = require("../core/core.js"),
+    RenderState = require("./render-state.js");
 
 /**@
  * #CanvasLayer
@@ -147,7 +148,7 @@ Crafty._registerLayerTemplate("Canvas", {
     },
 
     _render: function() {
-        var dirtyViewport = this._dirtyViewport,
+        var dirtyViewport = RenderState.consumeViewportDirty(this),
             l = this._changedObjs.length,
             ctx = this.context;
         if (!l && !dirtyViewport) {
@@ -345,7 +346,7 @@ Crafty._registerLayerTemplate("Canvas", {
                 obj._drawLayer === this
             ) {
                 obj.draw(ctx);
-                obj._changed = false;
+                RenderState.clearDirty(obj);
 
                 previousGlobalZ = obj._globalZ;
             }
@@ -378,14 +379,12 @@ Crafty._registerLayerTemplate("Canvas", {
             staleKeys.x2 = dirtyKeys.x2;
             staleKeys.y2 = dirtyKeys.y2;
 
-            obj._changed = false;
+            RenderState.clearDirty(obj);
         }
         changed.length = 0;
 
         this._dirtyCells = {};
         this._dirtyRects.length = 0;
-
-        this._dirtyViewport = false;
     },
 
     // Takes the current and previous position of changed objects and

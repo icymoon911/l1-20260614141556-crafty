@@ -1,4 +1,5 @@
-var Crafty = require("../core/core.js");
+var Crafty = require("../core/core.js"),
+    RenderState = require("./render-state.js");
 
 Crafty.extend({
     _drawLayerTemplates: {},
@@ -50,26 +51,11 @@ Crafty.extend({
         _cachedViewportRect: null,
 
         init: function() {
-            this._cachedViewportRect = {};
-
-            // Trigger layer-specific init code
-            this.trigger("LayerInit");
-
-            // Handle viewport invalidation
-            this.uniqueBind("InvalidateViewport", function() {
-                this._dirtyViewport = true;
-            });
-            // Set pixelart to current status
-            this.trigger("PixelartSet", Crafty._pixelartEnabled);
-
-            Crafty._addDrawLayerInstance(this);
+            RenderState.initLayer(this);
         },
 
         remove: function() {
-            // Trigger layer-specific remove code
-            this.trigger("LayerRemove");
-
-            Crafty._removeDrawLayerInstance(this);
+            RenderState.removeLayer(this);
         },
 
         // Sort function for rendering in the correct order
