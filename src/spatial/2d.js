@@ -1031,9 +1031,6 @@ Crafty.c("2D", {
             this.trigger("Reorder");
         }
 
-        //everything will assume the value
-        this[name] = value;
-
         // flag for redraw
         this.trigger("Invalidate");
 

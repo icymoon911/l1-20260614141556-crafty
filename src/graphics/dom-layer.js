@@ -55,7 +55,9 @@ Crafty._registerLayerTemplate("DOM", {
     },
 
     // Handle whether images should be smoothed or not
-    _setPixelArt: function(enabled) {
+    // Name must match the "PixelartSet" entry in the events map above
+    // (and the other layers' handlers) so the string handler resolves.
+    _setPixelart: function(enabled) {
         var style = this._div.style;
         var camelize = Crafty.domHelper.camelize;
         if (enabled) {
@@ -110,7 +112,7 @@ Crafty._registerLayerTemplate("DOM", {
         // Adjust the viewport
         if (this._dirtyViewport) {
             this._setViewport();
-            this._dirtyViewport = false;
+            this._clearDirtyViewport();
         }
 
         //if no objects have been changed, stop

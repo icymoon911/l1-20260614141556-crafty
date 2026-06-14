@@ -55,7 +55,8 @@ Crafty.extend({
             // Trigger layer-specific init code
             this.trigger("LayerInit");
 
-            // Handle viewport invalidation
+            // Handle viewport invalidation.
+            // When the viewport changes, mark the layer as needing a viewport transform update.
             this.uniqueBind("InvalidateViewport", function() {
                 this._dirtyViewport = true;
             });
@@ -70,6 +71,15 @@ Crafty.extend({
             this.trigger("LayerRemove");
 
             Crafty._removeDrawLayerInstance(this);
+        },
+
+        /**
+         * Clear the dirty viewport flag after the layer has applied
+         * the new viewport transforms during rendering.
+         * Call this at the end of each layer's render cycle.
+         */
+        _clearDirtyViewport: function() {
+            this._dirtyViewport = false;
         },
 
         // Sort function for rendering in the correct order

@@ -13,8 +13,13 @@ function TextureManager(gl, webgl) {
     this.bound_textures = [];
     // A dictionary of registered textures, so that multiple copies of the same texture aren't generated
     this.registered_textures = {};
-    // Try to track which texture is active
+    // The texture unit currently made active via gl.activeTexture (or null).
+    // Only mutate this through setActiveTexture/clearActiveUnit so the cached
+    // value can't drift out of sync with the real gl state.
     this.active = null;
+    // Filtering mode applied to textures (LINEAR, or NEAREST for pixelart).
+    // Owned here so layers don't have to track texture details themselves.
+    this.texture_filter = gl.LINEAR;
 }
 
 TextureManager.prototype = {
@@ -32,10 +37,6 @@ TextureManager.prototype = {
     // creates a texture out of the given image and repeating state
     // The url is just used to generate a unique id for the texture
     makeTexture: function(url, image, repeating) {
-        // gl is the context, webgl is the Crafty object containing prefs/etc
-        // var gl = this.gl;
-        var webgl = this.webgl;
-
         // Check whether a texture that matches the one requested already exists
         var id = "texture-(r:" + repeating + ")-" + url;
         if (typeof this.registered_textures[id] !== "undefined")
@@ -48,7 +49,7 @@ TextureManager.prototype = {
 
         // Set the properties of the texture
         t.setImage(image);
-        t.setFilter(webgl.texture_filter);
+        t.setFilter(this.texture_filter);
         t.setRepeat(repeating);
 
         return t;
@@ -97,9 +98,24 @@ TextureManager.prototype = {
     },
 
     setActiveTexture: function(t) {
-        if (this.active === t.id) return;
+        // `active` tracks the active texture *unit*, so compare against the
+        // unit, not the id. Comparing the wrong field meant this guard never
+        // matched and gl.activeTexture was re-issued on every call.
+        if (this.active === t.unit) return;
         this.gl.activeTexture(this.gl[t.name]);
         this.active = t.unit;
+    },
+
+    // Release the active unit if it is the one being given up. Centralizes
+    // mutation of `active` so texture wrappers don't poke it directly.
+    clearActiveUnit: function(unit) {
+        if (this.active === unit) this.active = null;
+    },
+
+    // Set the filtering mode used for textures created afterwards.
+    // NEAREST keeps pixelart crisp; LINEAR smooths when scaling.
+    setPixelart: function(enabled) {
+        this.texture_filter = enabled ? this.gl.NEAREST : this.gl.LINEAR;
     }
 };
 
@@ -111,7 +127,6 @@ function TextureWrapper(manager, id) {
     this.gl = manager.gl;
     this.glTexture = this.gl.createTexture();
     this.id = id;
-    this.active = false;
     this.unit = null;
     this.powerOfTwo = false;
 }
@@ -131,11 +146,14 @@ TextureWrapper.prototype = {
         return this.manager.active === this.unit;
     },
 
-    // Since gl doesn't require unbinding, just clears the metadata
+    // Since gl doesn't require unbinding, just clears the metadata.
+    // Capture the unit before clearing it, so the manager can release the
+    // active slot if this texture was holding it.
     unbind: function() {
+        var unit = this.unit;
         this.unit = null;
         this.name = null;
-        if (this.isActive()) this.manager.active = null;
+        this.manager.clearActiveUnit(unit);
     },
 
     // actually loads an image into the texture object; sets the appropriate metadata

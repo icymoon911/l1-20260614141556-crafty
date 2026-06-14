@@ -385,7 +385,7 @@ Crafty._registerLayerTemplate("Canvas", {
         this._dirtyCells = {};
         this._dirtyRects.length = 0;
 
-        this._dirtyViewport = false;
+        this._clearDirtyViewport();
     },
 
     // Takes the current and previous position of changed objects and

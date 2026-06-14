@@ -9,7 +9,8 @@ var Crafty = require("../core/core.js");
  * @trigger Invalidate - when the entity needs to be redrawn
  */
 Crafty.c("Renderable", {
-    // Flag for tracking whether the entity is dirty or not
+    // Flag for tracking whether the entity is dirty or not.
+    // Managed internally by _invalidateRenderable; external code should not modify this directly.
     _changed: false,
 
     /**@
@@ -33,15 +34,35 @@ Crafty.c("Renderable", {
      */
     _visible: true,
 
-    _setterRenderable: function(name, value) {
+    // Flip state along each axis. Declared explicitly so the equality
+    // guard in _setProperty sees "not flipped" as false rather than
+    // undefined; otherwise unflip() on a never-flipped entity would
+    // assign false !== undefined and fire a redundant Invalidate.
+    _flipX: false,
+    _flipY: false,
+
+    /**@
+     * #._setProperty
+     * @comp Renderable
+     * @kind Method
+     * @private
+     *
+     * @sign public void ._setProperty(String name, value)
+     * @param name - The backing field name (e.g. "_alpha", "_visible", "_flipX")
+     * @param value - The new value
+     *
+     * Standard setter for renderable properties.
+     * Compares the current value with the new value, and if different,
+     * assigns the new value and triggers "Invalidate".
+     *
+     * All Renderable properties that need to trigger a redraw on change
+     * should use this method to ensure consistent invalidation behavior.
+     */
+    _setProperty: function(name, value) {
         if (this[name] === value) {
             return;
         }
-
-        //everything will assume the value
         this[name] = value;
-
-        // flag for redraw
         this.trigger("Invalidate");
     },
 
@@ -49,7 +70,7 @@ Crafty.c("Renderable", {
     properties: {
         alpha: {
             set: function(v) {
-                this._setterRenderable("_alpha", v);
+                this._setProperty("_alpha", v);
             },
             get: function() {
                 return this._alpha;
@@ -61,7 +82,7 @@ Crafty.c("Renderable", {
 
         visible: {
             set: function(v) {
-                this._setterRenderable("_visible", v);
+                this._setProperty("_visible", v);
             },
             get: function() {
                 return this._visible;
@@ -79,12 +100,10 @@ Crafty.c("Renderable", {
     events: {
         Freeze: function() {
             this._hideOnUnfreeze = !this._visible;
-            this._visible = false;
-            this.trigger("Invalidate");
+            this._setProperty("_visible", false);
         },
         Unfreeze: function() {
-            this._visible = !this._hideOnUnfreeze;
-            this.trigger("Invalidate");
+            this._setProperty("_visible", !this._hideOnUnfreeze);
         }
     },
 
@@ -140,10 +159,7 @@ Crafty.c("Renderable", {
      */
     flip: function(dir) {
         dir = dir || "X";
-        if (!this["_flip" + dir]) {
-            this["_flip" + dir] = true;
-            this.trigger("Invalidate");
-        }
+        this._setProperty("_flip" + dir, true);
         return this;
     },
 
@@ -165,10 +181,7 @@ Crafty.c("Renderable", {
      */
     unflip: function(dir) {
         dir = dir || "X";
-        if (this["_flip" + dir]) {
-            this["_flip" + dir] = false;
-            this.trigger("Invalidate");
-        }
+        this._setProperty("_flip" + dir, false);
         return this;
     }
 });

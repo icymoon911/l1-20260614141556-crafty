@@ -353,6 +353,9 @@ Crafty._registerLayerTemplate("WebGL", {
 
         this.texture_manager = new Crafty.TextureManager(gl, this);
 
+        // The InvalidateViewport binding isn't set up until after LayerInit
+        // returns, so set the dirty flag directly for the initial state.
+        // Subsequent viewport changes will go through the standard event path.
         this._dirtyViewport = true;
     },
 
@@ -372,13 +375,11 @@ Crafty._registerLayerTemplate("WebGL", {
         gl.viewportHeight = c.height;
     },
 
-    // TODO consider shifting to texturemanager
+    // Texture filtering is owned by the texture manager; the layer just
+    // forwards the pixelart toggle to it.
     _setPixelart: function(enabled) {
-        var gl = this.context;
-        if (enabled) {
-            this.texture_filter = gl.NEAREST;
-        } else {
-            this.texture_filter = gl.LINEAR;
+        if (this.texture_manager) {
+            this.texture_manager.setPixelart(enabled);
         }
     },
 
@@ -401,7 +402,7 @@ Crafty._registerLayerTemplate("WebGL", {
             for (var comp in programs) {
                 programs[comp].setViewportUniforms(view, this.options);
             }
-            this._dirtyViewport = false;
+            this._clearDirtyViewport();
         }
 
         // Search for any entities in the given area (viewport unless otherwise specified)
