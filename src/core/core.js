@@ -334,29 +334,10 @@ Crafty.fn = Crafty.prototype = {
             if (comp && "required" in comp) {
                 this.requires(comp.required);
             }
-            // Define properties
-            if (comp && "properties" in comp) {
-                var props = comp.properties;
-                for (var propertyName in props) {
-                    Object.defineProperty(
-                        this,
-                        propertyName,
-                        props[propertyName]
-                    );
-                }
-            }
-            // Bind events
-            if (comp && "events" in comp) {
-                var auto = comp.events;
-                for (var eventName in auto) {
-                    var fn =
-                        typeof auto[eventName] === "function"
-                            ? auto[eventName]
-                            : comp[auto[eventName]];
-                    this.bind(eventName, fn);
-                }
-            }
-            // Call constructor function
+            // Apply declarative members: properties and auto-bound events
+            // (shared with systems via lifecycle.js)
+            Crafty._applySpecialMembers(this, comp);
+            // Call the component's constructor function with the entity as context
             if (comp && "init" in comp) {
                 comp.init.call(this);
             }
@@ -1538,10 +1519,8 @@ Crafty.extend({
             // Remove audio
             Crafty.audio.remove();
 
-            //Destroy all systems
-            for (var s in Crafty._systems) {
-                Crafty._systems[s].destroy();
-            }
+            // Destroy all systems (uses snapshot to avoid iteration hazard)
+            Crafty._destroyAllSystems();
 
             // Remove the stage element, and re-add a div with the same id
             if (Crafty.stage && Crafty.stage.elem.parentNode) {

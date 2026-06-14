@@ -1,5 +1,92 @@
 var Crafty = require("../core/core.js");
 
+// ═══════════════════════════════════════════════════════════════════
+// Scene lifecycle helpers (module-private)
+// ═══════════════════════════════════════════════════════════════════
+// These deliberately live outside the exported object so they are not
+// copied onto Crafty by Crafty.extend(): only the documented scene API
+// below is public, while the step-by-step lifecycle stays an internal
+// detail.
+
+/**
+ * Tear down the scene that is currently running, in preparation for
+ * entering `nextScene`.
+ *
+ * This is the whole "leave" phase, in order:
+ *   1. Trigger `SceneDestroy`           – announce the upcoming teardown
+ *   2. Reset the viewport               – clear camera transforms
+ *   3. Destroy non-Persist 2D entities  – clear the stage
+ *   4. Run outgoing scene's uninitialize hook (if one was defined)
+ *
+ * `Crafty._current` is intentionally left unchanged here so the
+ * uninitialize hook still runs in the context of its own scene.
+ */
+function teardownCurrentScene(nextScene) {
+    // 1. Announce that the current scene is about to be destroyed
+    Crafty.trigger("SceneDestroy", { newScene: nextScene });
+
+    // 2. Reset the viewport (scroll, scale, etc.)
+    Crafty.viewport.reset();
+
+    // 3. Destroy every 2D entity that doesn't have the Persist component
+    Crafty("2D").each(function() {
+        if (!this.has("Persist")) this.destroy();
+    });
+
+    // 4. Run the outgoing scene's uninitialize hook
+    var current = Crafty._current;
+    if (
+        current !== null &&
+        Crafty._scenes.hasOwnProperty(current) &&
+        "uninitialize" in Crafty._scenes[current]
+    ) {
+        Crafty._scenes[current].uninitialize.call(Crafty);
+    }
+}
+
+/**
+ * Bring up `name` as the new current scene.
+ *
+ * By the time this runs `Crafty._current` has already been advanced to
+ * `name`; we announce the change (reporting the scene we came from) and
+ * then run the incoming scene's initialize hook – or report an error if
+ * no such scene was ever defined.
+ */
+function startScene(name, data, oldScene) {
+    Crafty.trigger("SceneChange", {
+        oldScene: oldScene,
+        newScene: name
+    });
+
+    if (Crafty._scenes.hasOwnProperty(name)) {
+        Crafty._scenes[name].initialize.call(Crafty, data);
+    } else {
+        Crafty.error('The scene "' + name + '" does not exist');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Public scene API
+// ═══════════════════════════════════════════════════════════════════
+// These are the methods that get mixed onto Crafty via Crafty.extend().
+//
+// Scene transition order (important for event timing):
+//
+//   enterScene(name, data)
+//     │
+//     ├── 1. trigger SceneDestroy({ newScene })      ← "about to tear down"
+//     ├── 2. viewport.reset()
+//     ├── 3. destroy non-Persist 2D entities
+//     ├── 4. oldScene.uninitialize()                  ← user teardown hook
+//     ├── 5. _current = name                          ← advance reference
+//     ├── 6. trigger SceneChange({ oldScene, newScene }) ← "about to init"
+//     └── 7. newScene.initialize(data)                ← user init hook
+//
+// `SceneDestroy` always fires before any teardown work begins.
+// `SceneChange` always fires after teardown completes but before the
+// new scene's init runs.  Each fires exactly once per transition.
+//
+
 module.exports = {
     _scenes: {},
     _current: null,
@@ -83,23 +170,25 @@ module.exports = {
      * ~~~
      */
     scene: function(name, intro, outro) {
-        // If there's one argument, or the second argument isn't a function, play the scene
+        // If there's one argument, or the second argument isn't a function,
+        // this is a "play scene" call.
         if (arguments.length === 1 || typeof arguments[1] !== "function") {
             Crafty.enterScene(name, arguments[1]);
             return;
         }
-        // Otherwise, this is a call to create a scene
+        // Otherwise, this is a "define scene" call.
         Crafty.defineScene(name, intro, outro);
     },
 
-    /* 
+    /**
      * #Crafty.defineScene
      * @category Scenes, Stage
      * @kind Method
      *
-     * @sign public void Crafty.enterScene(String name[, Data])
-     * @param name - Name of the scene to run.
-     * @param Data - The init function of the scene will be called with this data as its parameter.  Can be of any type other than a function.
+     * @sign public void Crafty.defineScene(String name, Function init[, Function uninit])
+     * @param name - Name of the scene to define.
+     * @param init - Function to execute when scene is played.
+     * @param uninit - Function to execute before the next scene is played.
      *
      * @see Crafty.enterScene
      * @see Crafty.scene
@@ -107,67 +196,72 @@ module.exports = {
     defineScene: function(name, init, uninit) {
         if (typeof init !== "function")
             throw "Init function is the wrong type.";
-        this._scenes[name] = {};
-        this._scenes[name].initialize = init;
+        Crafty._scenes[name] = {
+            initialize: init
+        };
         if (typeof uninit !== "undefined") {
-            this._scenes[name].uninitialize = uninit;
+            Crafty._scenes[name].uninitialize = uninit;
         }
-        return;
     },
 
-    /* 
+    /**
      * #Crafty.enterScene
      * @category Scenes, Stage
      * @kind Method
-     * 
+     *
      * @trigger SceneChange - just before a new scene is initialized - { oldScene:String, newScene:String }
      * @trigger SceneDestroy - just before the current scene is destroyed - { newScene:String  }
      *
      * @sign public void Crafty.enterScene(String name[, Data])
      * @param name - Name of the scene to run.
      * @param Data - The init function of the scene will be called with this data as its parameter.  Can be of any type other than a function.
-     * 
+     *
      * @see Crafty.defineScene
      * @see Crafty.scene
      */
     enterScene: function(name, data) {
         if (typeof data === "function") throw "Scene data cannot be a function";
 
-        // ---FYI---
-        // this._current is the name (ID) of the scene in progress.
-        // this._scenes is an object like the following:
-        // {'Opening scene': {'initialize': fnA, 'uninitialize': fnB},
-        //  'Another scene': {'initialize': fnC, 'uninitialize': fnD}}
+        // A scene change is always tear-down-then-bring-up: the outgoing
+        // scene is fully torn down before _current advances, and the incoming
+        // scene is only initialized afterwards.  Keeping the two phases as
+        // distinct, ordered steps ensures they can never interleave (no init
+        // before teardown completes) and that each lifecycle event fires
+        // exactly once.
 
-        Crafty.trigger("SceneDestroy", {
-            newScene: name
-        });
-        Crafty.viewport.reset();
+        // Phase 1: tear down the current scene
+        teardownCurrentScene(name);
 
-        Crafty("2D").each(function() {
-            if (!this.has("Persist")) this.destroy();
-        });
-        // uninitialize previous scene
-        if (
-            this._current !== null &&
-            "uninitialize" in this._scenes[this._current]
-        ) {
-            this._scenes[this._current].uninitialize.call(this);
-        }
-        // initialize next scene
-        var oldScene = this._current;
-        this._current = name;
-        Crafty.trigger("SceneChange", {
-            oldScene: oldScene,
-            newScene: name
-        });
+        // Advance the current-scene pointer
+        var oldScene = Crafty._current;
+        Crafty._current = name;
 
-        if (this._scenes.hasOwnProperty(name)) {
-            this._scenes[name].initialize.call(this, data);
-        } else {
-            Crafty.error('The scene "' + name + '" does not exist');
-        }
+        // Phase 2: start the new scene
+        startScene(name, data, oldScene);
+    },
 
-        return;
+    /**
+     * #Crafty.currentScene
+     * @category Scenes, Stage
+     * @kind Method
+     *
+     * @sign public String Crafty.currentScene()
+     * @returns The name of the currently active scene, or null if no scene has been entered.
+     */
+    currentScene: function() {
+        return this._current;
+    },
+
+    /**
+     * #Crafty.isScene
+     * @category Scenes, Stage
+     * @kind Method
+     *
+     * @sign public Boolean Crafty.isScene(String name)
+     * @param name - The scene name to check.
+     * @returns True if a scene with the given name has been defined.
+     */
+    isScene: function(name) {
+        return this._scenes.hasOwnProperty(name);
     }
 };

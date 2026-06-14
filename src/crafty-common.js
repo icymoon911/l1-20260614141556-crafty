@@ -6,6 +6,7 @@ module.exports = function(requireNew) {
 
     var Crafty = require('./core/core');
     require('./core/extensions');
+    require('./core/lifecycle');
 
     Crafty.easing = require('./core/animation');
     Crafty.c('Model', require('./core/model'));
