@@ -1,50 +1,59 @@
-// Define common features
 var Crafty = require('./crafty-common.js')();
 
-// Define features only available in browser environment
+function loadModules(modules) {
+    modules.forEach(function(modulePath) {
+        require(modulePath);
+    });
+}
 
 Crafty.extend(require('./core/loader'));
 Crafty.extend(require('./inputs/dom-events'));
 
-// Needs to be required before any specific layers are
-require('./graphics/layers');
-require('./graphics/canvas');
-require('./graphics/canvas-layer');
-require('./graphics/webgl');
-require('./graphics/webgl-layer');
+loadModules([
+    './graphics/layers',
+    './graphics/canvas',
+    './graphics/canvas-layer',
+    './graphics/webgl',
+    './graphics/webgl-layer'
+]);
 
-require('./graphics/color');
-require('./graphics/dom');
-require('./graphics/dom-helper');
-require('./graphics/dom-layer');
-require('./graphics/drawing');
-require('./graphics/gl-textures');
-require('./graphics/renderable');
-require('./graphics/html');
-require('./graphics/image');
-require('./graphics/particles');
-require('./graphics/sprite-animation');
-require('./graphics/sprite');
-require('./graphics/text');
-require('./graphics/viewport');
+loadModules([
+    './graphics/color',
+    './graphics/dom',
+    './graphics/dom-helper',
+    './graphics/dom-layer',
+    './graphics/drawing',
+    './graphics/gl-textures',
+    './graphics/renderable',
+    './graphics/html',
+    './graphics/image',
+    './graphics/particles',
+    './graphics/sprite-animation',
+    './graphics/sprite',
+    './graphics/text',
+    './graphics/viewport'
+]);
 
-require('./isometric/diamond-iso');
-require('./isometric/isometric');
+loadModules([
+    './isometric/diamond-iso',
+    './isometric/isometric'
+]);
 
-// Needs to be required before any specific inputs are
-require('./inputs/util');
-require('./inputs/device');
-require('./inputs/keyboard');
-require('./inputs/lifecycle');
-require('./inputs/mouse');
-require('./inputs/pointer');
-require('./inputs/touch');
+loadModules([
+    './inputs/util',
+    './inputs/device',
+    './inputs/keyboard',
+    './inputs/lifecycle',
+    './inputs/mouse',
+    './inputs/pointer',
+    './inputs/touch'
+]);
 
-require('./sound/sound');
+loadModules([
+    './sound/sound',
+    './debug/debug-layer'
+]);
 
-require('./debug/debug-layer');
-
-// Define some aliases for renamed properties
 require('./aliases').defineAliases(Crafty);
 
 if (window) window.Crafty = Crafty;
